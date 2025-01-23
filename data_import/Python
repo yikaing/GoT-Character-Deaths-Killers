@@ -1,1 +1,241 @@
+# Environment Setup
+# At first, we imported the necessary libraries for our project.
 
+#Install the reticulate package to enable running Python code in R.
+
+library(reticulate)
+py_install("pandas")
+py_install("matplotlib")
+py_install("requests")
+py_install("openpyxl")
+
+import pandas as pd
+from io import StringIO
+import re
+import requests
+from PIL import Image, ImageEnhance 
+from io import BytesIO
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Import Death Data
+# We loaded data from the ‘Game of Thrones Deaths.xlsx’ file. To avoid Python automatically inferring data types and potentially introducing ambiguity, we explicitly specified the dtype parameter in read_excel. Furthermore, we renamed the columns to maintain consistent and uniform header naming conventions.
+
+death_type_spec = {
+    'Name': 'string',
+    'Allegiance': 'string',
+    'Season': 'int32',
+    'Episode': 'int32',
+    'Location': 'string',
+    'Killer': 'string',
+    'Killers House': 'string',
+    'Method': 'string',
+    'Death No.': 'int32'
+}
+
+# Read data from excel file
+raw_deaths = pd.read_excel(open('data/Game of Thrones Deaths.xlsx', 'rb'), sheet_name = 'Game of Thrones Deaths collecti', dtype = death_type_spec)  
+
+
+# Clean the column names: convert to lowercase, replace spaces with '_', and remove special characters
+got_deaths = (
+    raw_deaths.rename(columns = str.lower)
+              .rename(columns = lambda x: x.replace( ' ', '_' ))
+              .rename(columns = lambda x: re.sub('[^a-z0-9_]', '', x ))
+)
+
+got_deaths
+
+# Validation Queries
+# Check row count
+len(got_deaths)
+
+# Check data types for each column
+got_deaths.info()
+
+# Check missing values
+got_deaths.isnull().sum()
+
+# Check for duplicates
+got_deaths.duplicated().sum()
+
+# Note: The validation results for missing values show slight differences in Python. This is because Python’s isnull() function treats None as a null value.
+
+# Import Episode Data
+# The episode data is imported from the ‘GOT_episodes_v4.csv’ file. Following the same process as with the death data, we explicitly specified the dtype to prevent inaccurate type guessing. Additionally, we formatted date strings, such as “20-Apr-2014,” into date types.
+
+episode_type_spec = {
+    'Season': 'int32',
+    'Episode': 'int32',
+    'Title': 'string',
+    'Release_date': 'string',
+    'Rating': 'float64',
+    'Votes': 'int32',
+    'Summary': 'string',
+    'Writer_1': 'string',
+    'Writer_2': 'string',
+    'Star_1': 'string',
+    'Star_2': 'string',
+    'Star_3': 'string',
+    'Users_reviews': 'int32',
+    'Critics_reviews': 'int32',
+    'US_Viewers': 'float64',
+    'Duration': 'float64',
+    'Director': 'string',
+    'Budget_estimate': 'float64'
+}
+
+# Read the CSV file
+raw_episodes = pd.read_csv(
+    "data/GOT_episodes_v4.csv",
+    dtype=episode_type_spec
+)
+
+got_episodes = (
+        raw_episodes.rename( columns=str.lower )
+                    .assign( release_date=lambda df: pd.to_datetime( df['release_date'], format='%d-%b-%y' ) )
+)
+
+got_episodes
+
+# Validation Queries
+# Check data types for each column
+got_episodes.info()
+
+# Check missing values
+got_episodes.isnull().sum()
+
+# Check for duplicates
+(got_episodes.groupby(['season', 'episode'])
+  .size()
+  .reset_index(name='count')
+  .query('count > 1'))
+
+# Import Map Location Data
+# The map location data is imported from the ‘opening-locations.json’ file, which contains two key-value pairs: note and locations. We processed each individually. From the note key-value pair, we extracted the URL of the map image using regex. For the locations key-value pair, we extracted the data into a location data frame. Since the locations contain a dictionary with multiple fields for each location, we used apply to access each dictionary’s fields individually for each row.
+
+raw_map = pd.read_json('data/opening-locations.json')
+
+# Retrieve map url from note
+got_map_url = re.findall( 'https://[^ ]+', raw_map['note'][0] )
+
+got_map_url
+
+got_locations = (
+    raw_map.assign(
+        name = lambda x: x['locations'].apply(lambda d: d['name']),
+        fx = lambda x: x['locations'].apply(lambda d: d['fx']),
+        fy = lambda x: x['locations'].apply(lambda d: d['fy'])
+    )
+    .drop( columns = ['note', 'locations'] )
+)
+
+got_locations
+
+# Validation Queries
+# Check data types for each column
+got_locations.info()
+
+# Check missing values
+got_locations.isnull().sum()
+
+# Check for duplicates
+got_locations.duplicated().sum()
+
+# Check if the location dataframe is rectangular
+# We verify whether the number of each column has the same number of rows
+(got_locations.apply(len)
+  .eq(len(got_locations))
+  .all())
+
+# Import Characters Data
+# The character data is imported from the ‘characters_v4.csv’ file. We followed the same workflow as below to explicitly set column types, preventing pandas from guessing them. Additionally, we rename each column name to standardize them.
+
+character_type_spec = {
+    'Character': 'string',
+    'Actor/ess': 'string',
+    'Episodes_appeared': 'int32',
+    'First_appearance': 'int32',
+    'Last_appearance': 'int32',
+}
+
+# Read the CSV file
+raw_characters = pd.read_csv(
+    "data/characters_v4.csv",
+    dtype=character_type_spec
+)
+
+got_characters = (
+    raw_characters.rename(columns = str.lower)
+              .rename(columns = lambda x: x.replace( ' ', '_' ))
+)
+
+# Validation Queries
+# Check data types
+got_characters.info()
+
+# Check missing values
+got_characters.isnull().sum()
+
+# Check for duplicates
+(got_characters.groupby('character')
+  .size()
+  .reset_index(name='count')
+  .query('count > 1'))
+
+# There are duplicates due a general character appearing multiple times in a single episode or a character was played by different actors in an episode.
+
+# Import a look-up table to map locations to their corresponding regions
+# We required a look-up table to get the relationship between death locations and map regions. Due to insufficient data, we used Perplexity to generate the table. Our process is described below:
+# First, we extracted the individual lists of death locations and map regions.
+
+# Extract location names from the death data
+location_list = (
+    got_deaths['location']
+        .drop_duplicates(keep = 'first')
+        .reset_index(drop = True)
+)
+
+location_list
+
+# Extract region names from the map location data
+region_list = got_locations.filter(items = ['name'])
+
+region_list
+
+# Secondly, We used Perplexity to generate the look-up table. In our prompt, we included the complete lists of locations and regions and specified the desired output format to ensure clarity and ease of use.
+
+# Once the table was generated, we copied it into Excel and saved it as a CSV file, ‘location_region.csv.’ We then imported the CSV file into our project, following the same workflow as the other data sets.
+
+location_region_type_spec = {
+    'Location' : 'string',
+    'Region' : 'string'
+}
+
+# Read the CSV file
+raw_location_region = pd.read_csv(
+    "data/location_region.csv",
+    dtype=location_region_type_spec
+)
+
+got_location_region = (
+    raw_location_region.rename( columns=str.lower )
+)
+
+got_location_region
+
+# Validation Queries
+# Check data types
+got_location_region.info()
+
+# Check missing values
+got_location_region.isnull().sum()
+
+# Check for duplicates
+got_location_region.duplicated().sum()
+
+# Check for duplicate locations
+(got_location_region.groupby('location')
+  .size()
+  .reset_index(name='count')
+  .query('count > 1'))
