@@ -1,1 +1,161 @@
+# Environment Setup
+# At first, we imported the necessary libraries for our project.
+
+library(tidyverse)
+library(readxl) # library for reading data from excel
+library(naniar) # library for handling missing data
+library(ggplot2) # library for graph
+library(jsonlite) # library for reading json file
+library(magick) # image processing took kit
+
+# Import Death Data
+# We loaded data from the ‘Game of Thrones Deaths.xlsx’ file. To avoid the program automatically inferring data types and potentially introducing ambiguity, we explicitly specified the col_types parameter in read_excel. Furthermore, we renamed the columns to maintain consistent and uniform header naming conventions.
+
+death_data_type = c("text", "text", "numeric", "numeric", "text", "text", "text", "text", "numeric")
+
+got_deaths = read_excel( "data/Game of Thrones Deaths.xlsx", col_types = death_data_type ) |>
+  janitor::clean_names()
+
+got_deaths
+
+# Validation Queries
+# Check row count
+got_deaths |> 
+  summarize(row_count = n())
+# Check data types
+got_deaths |> 
+  glimpse()
+# Check missing values
+got_deaths |> 
+  summarize(across(everything(), ~ sum(is.na(.)), .names = "missing_{.col}"))
+# Check for duplicates
+got_deaths |> 
+  summarize(duplicate_count = sum(duplicated(got_deaths)))
+
+# Import Episode Data
+# The episode data is imported from the ‘GOT_episodes_v4.csv’ file. Following the same process as with the death data, we explicitly specified the data types for tidyverse to prevent inaccurate type guessing. Additionally, we formatted date strings, such as “20-Apr-2014,” into date types.
+
+episode_data_col_spec = cols(
+  Season = col_double(),
+  Episode = col_double(),
+  Title = col_character(),
+  Release_date = col_character(),
+  Rating = col_double(),
+  Votes = col_double(),
+  Summary = col_character(),
+  Writer_1 = col_character(),
+  Writer_2 = col_character(),
+  Star_1 = col_character(),
+  Star_2 = col_character(),
+  Star_3 = col_character(),
+  Users_reviews = col_double(),
+  Critics_reviews = col_double(),
+  US_Viewers = col_double(),
+  Duration = col_double(),
+  Director = col_character(),
+  Budget_estimate = col_double()
+)
+
+raw_episodes = read_csv("data/GOT_episodes_v4.csv", col_types = episode_data_col_spec) |>
+  janitor::clean_names()
+
+got_episodes <- raw_episodes |>
+    mutate( release_date = as.Date(release_date, format = "%d-%b-%y") )
+
+got_episodes
+
+# Validation Queries
+# Check row count
+raw_episodes |> 
+  summarize(row_count_match = n() == nrow(got_episodes))
+# Check data types
+got_episodes |> 
+  glimpse()
+# Check missing values
+got_episodes |> 
+  summarize(across(everything(), ~ sum(is.na(.)), .names = "missing_{.col}"))
+#Check for duplicates
+raw_episodes |> 
+  summarize(duplicate_count = sum(duplicated(raw_episodes)))
+
+# Import Map Location Data
+# The map location data is imported from the ‘opening-locations.json’ file, which contains two key-value pairs: note and locations. We processed each individually. From the note key-value pair, we extracted the URL of the map image using a str_extract() with a regex pattern. For the locations key-value pair, we extracted the data into a location data frame. We then further examined this data frame to ensure it is in a rectangular data structure.
+
+raw_map_data <- fromJSON("data/opening-locations.json")
+
+got_map_url <- raw_map_data$note |>
+  str_extract( "https://[^ ]+" )
+
+got_map_url
+
+# Transform data into a rectangular format
+tibble(locations = raw_map_data$locations) |>
+  unnest_wider(locations, ptype = list(
+      name = character(),
+      fx = numeric(),
+      fy = numeric()
+      )) -> got_locations
+
+got_locations
+
+# Validation Queries
+# Ensure `raw_map_data` is a data frame
+raw_map_data <- as.data.frame(raw_map_data)
+# Check row count
+raw_map_data |> 
+  summarize(row_count_match = n() == nrow(got_locations))
+# Check data types
+got_locations |> 
+  glimpse()
+# Check missing values
+got_locations |> 
+  summarize(across(everything(), ~ sum(is.na(.)), .names = "missing_{.col}"))
+# Check for duplicates
+got_locations |> 
+  summarize(duplicate_count = sum(duplicated(got_locations)))
+# Check if the location dataframe is rectangular
+# We verify whether the number of each column has the same number of rows
+got_locations |> 
+  summarize(is_rectangular = all(across(everything(), ~ length(.) == nrow(got_locations))))
+
+# Import Characters Data
+# The character data is imported from the ‘characters_v4.csv’ file. We followed the same workflow as below to explicitly set column types, preventing Tidyverse from guessing them. Additionally, we used the janitor::clean_names() function to clean and standardize the column names.
+
+character_col_spec = cols(
+  Character = col_character(),
+  `Actor/ess` = col_character(),
+  Episodes_appeared = col_integer(),
+  First_appearance = col_integer(),
+  Last_appearance = col_integer()
+)
+
+got_characters <- read_csv( "data/characters_v4.csv", col_type = character_col_spec ) |>
+  janitor::clean_names()
+
+got_characters
+
+# Validation Queries
+#Check row count
+got_characters |> 
+  summarize(row_count = n())
+#Check data types
+got_characters |> 
+  glimpse()
+#Check missing values
+got_characters |> 
+  summarize(across(everything(), ~ sum(is.na(.)), .names = "missing_{.col}"))
+#Check for duplicates
+got_characters |> 
+  summarize(duplicate_count = sum(duplicated(got_characters)))
+
+# Import a look-up table to map locations to their corresponding regions
+# We required a look-up table to get the relationship between death locations and map regions. Due to insufficient data, we used Perplexity to generate the table. Our process is described below:
+# First, we extracted the individual lists of death locations and map regions.
+
+# Retrieve death location list
+distinct( got_deaths, location )
+
+# Retrieve map region list
+got_locations |>
+  select(name)
 
