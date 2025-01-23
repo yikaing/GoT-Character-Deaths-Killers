@@ -1,1 +1,288 @@
+# Environment Setup
+# At first, we imported the necessary libraries for our project.
 
+library(tidyverse)
+library(readxl)
+library(lubridate)
+library(jsonlite)
+
+# Connecting to DuckDB
+# Then, we loaded the DuckDB library to connect to the local DuckDB database.
+
+library(DBI)
+library(duckdb)
+options(duckdb.enable_rstudio_connection_pane=TRUE)
+
+# create / connect to database file
+drv <- duckdb()
+con <- dbConnect(drv)
+
+# Import Death Data
+# We loaded data from the ‘Game of Thrones Deaths.xlsx’ file using the st_read function. This method directly imported the data into our DuckDB database, creating the raw_deaths table.
+
+--Extenstion to read data from an Excel file
+INSTALL spatial;
+LOAD spatial;
+
+CREATE OR REPLACE TEMP TABLE raw_deaths AS
+SELECT * FROM st_read('data/Game of Thrones Deaths.xlsx');
+
+# To create the got_deaths table, we transformed the original raw_deaths dataset by normalizing key fields and ensuring consistency in data types. We generated normalized columns (normalized_name, normalized_allegiance, and normalized_location) by converting text to lowercase and trimming any extra whitespace, which helps standardize the data for efficient joins and comparisons. We also cast several fields to appropriate data types, such as season and episode to INTEGER, and other descriptive fields like name, allegiance, and method to TEXT.
+
+CREATE OR REPLACE TEMP TABLE got_deaths AS
+SELECT 
+    LOWER(TRIM(name)) AS normalized_name,
+    LOWER(TRIM(allegiance)) AS normalized_allegiance,
+    CAST(season AS INTEGER) AS season,
+    CAST(episode AS INTEGER) AS episode,
+    LOWER(TRIM(location)) AS normalized_location,
+    CAST(killer AS TEXT) AS killer,
+    CAST("killers house" AS TEXT) AS killers_house,
+    CAST(method AS TEXT) AS method,
+    CAST("death no." AS INTEGER) AS death_no
+FROM raw_deaths;
+
+# Validation Queries
+-- Check row count
+SELECT COUNT(*) AS row_count
+FROM got_deaths;
+
+-- Check data types
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'got_deaths';
+
+-- Check missing values
+SELECT column_name, COUNT(*) - COUNT(column_name) AS missing_count
+FROM information_schema.columns
+WHERE table_name = 'got_deaths'
+GROUP BY column_name;
+
+-- Check for duplicates
+SELECT 
+COUNT(*) - COUNT(DISTINCT (normalized_name, normalized_allegiance, season, episode, normalized_location, killer, killers_house, method, death_no)) AS duplicate_count
+FROM got_deaths;
+--There are duplicates due to a general character appearing multiple times in a single episode or a character was played by different actors in an episode
+
+# Once the table was created, we tested it to ensure it was functioning as expected.
+SELECT *
+FROM got_deaths;
+
+# Import Episode Data
+# The episode data is imported from the ‘GOT_episodes_v4.csv’ file by directly reading the data file into our DuckDB database, creating the raw_episodes table.
+
+CREATE OR REPLACE TEMP TABLE raw_episodes AS
+SELECT * FROM 'data/GOT_episodes_v4.csv';
+
+# We then created the got_episodes table to transform the original raw_episodes dataset into a more structured format. We casted several columns to their appropriate data types: season and episode to INTEGER, and rating, us_viewers, and budget_estimate to FLOAT. We also normalized text fields, such as title, summary, writers, stars, and director by converting them to lowercase for consistency. The release_date was processed using STRPTIME to convert it into a proper date format.
+
+CREATE OR REPLACE TEMP TABLE got_episodes AS
+SELECT 
+    CAST(season AS INTEGER) AS season,
+    CAST(episode AS INTEGER) AS episode,
+    LOWER(title) AS title,
+    STRPTIME(release_date, '%d-%b-%y') AS release_date,
+    CAST(rating AS FLOAT) AS rating,
+    CAST(votes AS INTEGER) AS votes,
+    LOWER(summary) AS summary,
+    LOWER(writer_1) AS writer_1,
+    LOWER(writer_2) AS writer_2,
+    LOWER(star_1) AS star_1,
+    LOWER(star_2) AS star_2,
+    LOWER(star_3) AS star_3,
+    CAST(users_reviews AS INTEGER) AS users_reviews,
+    CAST(critics_reviews AS INTEGER) AS critics_reviews,
+    CAST(us_viewers AS FLOAT) AS us_viewers,
+    CAST(duration AS FLOAT) AS duration,
+    LOWER(director) AS director,
+    CAST(budget_estimate AS FLOAT) AS budget_estimate
+FROM raw_episodes;
+
+# Validation Queries
+-- Check row count
+SELECT COUNT(*) AS row_count
+FROM got_episodes;
+
+-- Check data types
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'got_episodes';
+
+-- Check missing values
+SELECT column_name, COUNT(*) - COUNT(column_name) AS missing_count
+FROM information_schema.columns
+WHERE table_name = 'got_episodes'
+GROUP BY column_name;
+
+-- Check for duplicates
+SELECT 
+COUNT(*) - COUNT(DISTINCT (season, episode, title, release_date, rating, votes, summary, writer_1, writer_2, star_1, star_2, star_3, users_reviews, critics_reviews, us_viewers, duration, director, budget_estimate)) AS duplicate_count
+FROM got_episodes;
+
+# Once the table was created, we tested it to ensure it was functioning as expected.
+SELECT *
+FROM got_episodes;
+
+# Import Map Location Data
+# The map location data is imported from the ‘opening-locations.json’ file, which contains two key-value pairs: note and locations. We processed each individually by first loading the JSON data into a table named raw_map_data using the read_json_auto function. The locations field, which is an array of nested JSON objects, was then flattened using the UNNEST function to create individual rows for each object in the array. The ->> operator was used to extract specific values (name, fx, and fy) from the JSON objects as plain text. These extracted fields were then transformed and stored in a new table named locations. The notes field was directly extracted into another table named notes.
+
+--Extension to read data from a JSON file
+INSTALL json;
+LOAD json;
+
+CREATE OR REPLACE TEMP TABLE raw_map_data AS
+SELECT *
+FROM read_json_auto('data/opening-locations.json');
+  
+CREATE OR REPLACE TEMP TABLE locations AS
+SELECT
+    location.value->>'name' AS name, --Extracts the 'name' field as text
+    CAST(location.value->>'fx' AS DOUBLE) AS fx, --Extracts 'fx' and casts it to DOUBLE
+    CAST(location.value->>'fy' AS DOUBLE) AS fy --Extracts 'fy' and casts it to DOUBLE
+FROM raw_map_data,
+UNNEST(locations) AS location(value);
+
+CREATE OR REPLACE TEMP TABLE notes AS
+SELECT note
+FROM raw_map_data;
+
+# Map URL
+# We created the got_map_url table to extract the map URL from the notes table. Using the REGEXP_EXTRACT function, we identified and extracted the URL pattern present in the note field.
+
+CREATE OR REPLACE TEMP TABLE got_map_url AS
+SELECT 
+    REGEXP_EXTRACT(note, 'https://[^ ]+') AS map_url
+FROM notes;
+
+# Once the table was created, we tested it to ensure it was functioning as expected.
+SELECT * 
+FROM got_map_url;
+
+# Locations
+# Next, we created the got_locations table to store information about the map locations. We used LOWER(TRIM(name)) to create a normalized_name column, ensuring consistency by converting the location names to lowercase and removing any extra whitespace. Additionally, we cast the name as TEXT, and the coordinates (fx and fy) as FLOAT to represent loc_x and loc_y.
+
+CREATE OR REPLACE TEMP TABLE got_locations AS
+SELECT 
+    LOWER(TRIM(name)) AS normalized_name,
+    CAST(fx AS FLOAT) AS loc_x,
+    CAST(fy AS FLOAT) AS loc_y
+FROM locations;
+
+# Validation Queries
+-- Check row count
+SELECT COUNT(*) AS row_count
+FROM got_locations;
+
+-- Check data types
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'got_locations';
+
+-- Check missing values
+SELECT column_name, COUNT(*) - COUNT(column_name) AS missing_count
+FROM information_schema.columns
+WHERE table_name = 'got_locations'
+GROUP BY column_name;
+
+-- Check for duplicates
+SELECT 
+COUNT(*) - COUNT(DISTINCT (normalized_name, loc_x, loc_y)) AS duplicate_count
+FROM got_locations;
+
+# Once the table was created, we tested it to ensure it was functioning as expected.
+SELECT * 
+FROM got_locations;
+
+# Import Characters Data
+# The character data is imported from the ‘characters_v4.csv’ file. We followed the same workflow as below by directly reading the data file into our DuckDB database, creating the characters table.
+
+CREATE OR REPLACE TEMP TABLE characters AS
+SELECT * FROM 'data/characters_v4.csv';
+
+# The got_characters table was created to transform and standardize the characters data for easier analysis. We created a normalized_character column by converting the character names to lowercase and trimming any extra whitespace, ensuring consistency when joining with other datasets. The character and actor_ess fields were also converted to lowercase for uniformity. Additionally, we cast numerical fields, such as episodes_appeared, first_appearance, and last_appearance, as INTEGER to ensure the correct data type.
+
+CREATE OR REPLACE TEMP TABLE got_characters AS
+SELECT 
+    LOWER(TRIM(character)) AS normalized_character,
+    LOWER("actor/ess") AS actor_ess,
+    CAST(episodes_appeared AS INTEGER) AS episodes_appeared,
+    CAST(first_appearance AS INTEGER) AS first_appearance,
+    CAST(last_appearance AS INTEGER) AS last_appearance
+FROM characters;
+
+# Validation Queries
+-- Check row count
+SELECT COUNT(*) AS row_count
+FROM got_characters;
+
+-- Check data types
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'got_characters';
+
+-- Check missing values
+SELECT column_name, COUNT(*) - COUNT(column_name) AS missing_count
+FROM information_schema.columns
+WHERE table_name = 'got_characters'
+GROUP BY column_name;
+
+-- Check for duplicates
+SELECT 
+COUNT(*) - COUNT(DISTINCT (normalized_character, actor_ess, episodes_appeared, first_appearance, last_appearance)) AS duplicate_count
+FROM got_characters;
+
+# Once the table was created, we tested it to ensure it was functioning as expected.
+SELECT *
+FROM got_characters;
+
+# Import a look-up table to map locations to their corresponding regions
+# We required a look-up table to get the relationship between death locations and map regions. Due to insufficient data, we used Perplexity to generate the table. Our process is described below:
+# First, we extracted the individual lists of death locations and map regions.
+
+--list of death locations
+SELECT DISTINCT location
+FROM raw_deaths;
+
+--list of map regions
+SELECT name 
+FROM locations;
+
+# Secondly, We used Perplexity to generate the look-up table. In our prompt, we included the complete lists of locations and regions and specified the desired output format to ensure clarity and ease of use.
+
+# Once the table was generated, we copied it into Excel and saved it as a CSV file, ‘location_region.csv.’ We then imported the CSV file into our project, following the same workflow as the other data sets.
+
+CREATE OR REPLACE TEMP TABLE raw_region_location AS
+SELECT * FROM 'data/location_region.csv';
+
+# We then created the got_region_location table to standardize the mapping of regions and locations. In this step, we used LOWER(TRIM()) to create normalized_region and normalized_location columns, ensuring the region and location names were consistent by converting them to lowercase and removing any extra whitespace. Additionally, we created region and location columns by converting their original values to lowercase for consistency.
+
+CREATE OR REPLACE TEMP TABLE got_region_location AS
+SELECT 
+    LOWER(TRIM("Region")) AS normalized_region,
+    LOWER(TRIM("Location")) AS normalized_location,
+FROM raw_region_location;
+
+# Validation Queries
+-- Check row count
+SELECT COUNT(*) AS row_count
+FROM got_region_location;
+
+-- Check data types
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'got_region_location';
+
+-- Check missing values
+SELECT column_name, COUNT(*) - COUNT(column_name) AS missing_count
+FROM information_schema.columns
+WHERE table_name = 'got_region_location'
+GROUP BY column_name;
+
+-- Check for duplicates
+SELECT 
+COUNT(*) - COUNT(DISTINCT (normalized_region, normalized_location)) AS duplicate_count
+FROM got_region_location;
+
+# Once the table was created, we tested it to ensure it was functioning as expected.
+SELECT * 
+FROM got_region_location;
