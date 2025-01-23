@@ -175,6 +175,7 @@ got_locations |>
   select(name)
 
 # Secondly, We used Perplexity to generate the look-up table. In our prompt, we included the complete lists of locations and regions and specified the desired output format to ensure clarity and ease of use.
+
 # Once the table was generated, we copied it into Excel and saved it as a CSV file, ‘location_region.csv.’ We then imported the CSV file into our project, following the same workflow as the other data sets.
 
 region_location_col_spec = cols(
