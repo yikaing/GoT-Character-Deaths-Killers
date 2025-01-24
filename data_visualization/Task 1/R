@@ -1,1 +1,45 @@
+# Task 1: How do the death of prominent characters influence the ratings?
 
+# To analyze the data, we organized it by season, episode, and the number of episodes to identify the prominent characters within each episode. We then grouped the data by season and episode for aggregation. This allows us to calculate the death count for each episode while retaining the episode ratings for further analysis. Upon examining the aggregation results, we observed that not every episode has character deaths. To address this, we joined the aggregated data with the original episode data to include ratings for all episodes and filled the death count with zeros for episodes without any deaths. Finally, we created a scatter plot to visualize the relationship between episode ratings, death counts, and the deaths of prominent characters.
+
+episode_summary <- deaths_detail_info |>
+  group_by( season, episode ) |>
+  arrange( desc(episodes_appeared), by_group = TRUE ) |>
+  summarize(
+      num_deaths = n(),  
+      ep_rating = first(rating),
+      prominent_death_episodes_appeared = first(episodes_appeared),
+      .groups = "drop"
+  ) |>
+  right_join( got_episodes |>
+    select( season, episode, rating ),
+    by = c("season", "episode")
+  ) |>
+ mutate(
+   num_deaths = replace_na(num_deaths, 0),
+   ep_rating = rating,
+   prominent_death_episodes_appeared = replace_na(prominent_death_episodes_appeared, 0)
+  ) |>
+  select(season, episode, num_deaths, ep_rating, prominent_death_episodes_appeared) |>
+  arrange( season, episode )
+
+episode_summary
+
+# Adding 1 to ensure the logarithm is valid,
+ggplot(episode_summary, aes(x = ep_rating, y = log(num_deaths + 1))) +
+  geom_point(aes(size = prominent_death_episodes_appeared), alpha = 0.8, color = "blue") + 
+  scale_size_continuous(range = c(1, 8), name = "Appeared Episodes of\n Prominent Characters") +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(
+    title = "Relationship Between Episode Ratings, Death Count,\n and Prominent Character Deaths",
+    x = "Episode Rating",
+    y = "log(Death Count)"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    axis.title = element_text(size = 12)
+  )
+
+[Visualization]()
+# Analysis: This scatterplot shows a positive correlation between episode ratings and the number of deaths in the show. Episodes with higher ratings tend to have more deaths, especially as ratings approach 10. The regression line has a slight upward slope, suggesting a mild positive correlation between the two variables. Although the trend is positive, the correlation appears to be weak, as the data points are widely scattered around the line. There are several episodes with both high and low death counts across varying ratings, indicating that while episodes with higher ratings may have slightly more deaths, it is not a strong or consistent pattern. Additionally, the deaths of prominent characters appear to be randomly distributed, making it difficult to identify any clear relationship between these deaths and episode ratings.
