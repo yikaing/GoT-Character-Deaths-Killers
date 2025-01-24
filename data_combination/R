@@ -1,1 +1,28 @@
+# We addressed the issue of the many-to-many relationship between the character and death data sets. Some characters were listed using general terms, such as “Wildling” or “Stark Soldier”, and we didn’t have enough information to match them accurately. To handle this, we decided to remove these general terms. Since they could appear multiple times in the data sets, we removed the duplicate entries from both the character and death data sets.
 
+# Exclude the characters having repeated names
+got_characters <- got_characters |>
+  distinct(character, .keep_all = TRUE)
+
+got_characters
+
+# Exclude the deaths having repeated names
+got_deaths <- got_deaths |>
+  distinct(name, .keep_all = TRUE)
+
+got_deaths
+
+# We moved on to the main process of data combination.
+
+# First, we joined the death data with the episode data based on the season and episode. Next, we used the victim’s name to join the character data, which provided the number of episodes each victim appeared in. We then dropped the irrelevant columns to ensure the data was focused on our goals. During this stage, we discovered that some victims were missing episode appearance data. Assuming each character appeared at least once, we filled in the missing values with 1. Finally, we used the look-up table to join the death location with the corresponding map region. Through this process, we created a unified data frame for further analysis and visualization.
+
+deaths_detail_info <- got_deaths |>
+  left_join( got_episodes, by = c("season", "episode")  ) |>
+  left_join( got_characters, by = join_by( name == character )  ) |>
+  select( season, episode, title, rating, name, killer, location, episodes_appeared ) |>
+  # Assume characters without data for episodes_appeared have appeared at least once in a scene
+  mutate( episodes_appeared = replace_na( episodes_appeared, 1 )) |>
+  left_join( got_region_location, by = "location" )|>
+  left_join( got_locations, by = join_by( region == name )  )
+
+deaths_detail_info
