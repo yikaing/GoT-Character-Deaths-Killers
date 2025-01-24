@@ -95,7 +95,7 @@ All datasets were imported into RStudio (using R and SQL) and Jupyter Hub (using
 The imported datasets were merged into a single data frame to create a cohesive structure for analysis and visualization. Relationships between datasets were established using key attributes, ensuring the combined data was ready for further exploration. The code and explanation for this process is provided in the [data_combination](data_combination) folder.
 
 # Data Analysis and Visualization
-The analysis focused on two key tasks: examining how the deaths of prominent characters influenced episode ratings and identifying which regions were most frequently targeted. These insights were visualized to reveal patterns and trends in the data. The code and visualizations for these tasks are available in the data_visualization folder.
+The analysis focused on two key tasks: examining how the deaths of prominent characters influenced episode ratings and identifying which regions were most frequently targeted. These insights were visualized to reveal patterns and trends in the data. The code and visualizations for these tasks are available in the [data_visualization](data_visualization) folder.
 
 # Project Challenges
 - **Handling Many-to-Many Mappings**
