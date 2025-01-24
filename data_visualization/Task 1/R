@@ -41,5 +41,5 @@ ggplot(episode_summary, aes(x = ep_rating, y = log(num_deaths + 1))) +
     axis.title = element_text(size = 12)
   )
 
-[Visualization](data_visualization/Task 1/Results/R Visualization.png)
+
 # Analysis: This scatterplot shows a positive correlation between episode ratings and the number of deaths in the show. Episodes with higher ratings tend to have more deaths, especially as ratings approach 10. The regression line has a slight upward slope, suggesting a mild positive correlation between the two variables. Although the trend is positive, the correlation appears to be weak, as the data points are widely scattered around the line. There are several episodes with both high and low death counts across varying ratings, indicating that while episodes with higher ratings may have slightly more deaths, it is not a strong or consistent pattern. Additionally, the deaths of prominent characters appear to be randomly distributed, making it difficult to identify any clear relationship between these deaths and episode ratings.
