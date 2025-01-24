@@ -34,9 +34,9 @@ FROM got_deaths;
 
 # Instead of creating a new identifier, we joined the datasets based directly on the season and episode fields from the death and episode data. We then used these fields to join the episode data (got_episodes).
 
-Next, we joined the character data (got_characters) using the normalized_name of each victim, which provided the number of episodes each victim appeared in (episodes_appeared). We then dropped the irrelevant columns to ensure the data was focused on our goals. During this stage, we discovered that some victims were missing episode appearance data. Assuming each character appeared at least once, we filled in the missing values with 1 using COALESCE.
+# Next, we joined the character data (got_characters) using the normalized_name of each victim, which provided the number of episodes each victim appeared in (episodes_appeared). We then dropped the irrelevant columns to ensure the data was focused on our goals. During this stage, we discovered that some victims were missing episode appearance data. Assuming each character appeared at least once, we filled in the missing values with 1 using COALESCE.
 
-Following this, we used the death normalized_location to join the got_region_location table, giving us the normalized_region for each death. Finally, we joined the map coordinates (got_locations) based on the region, which allowed us to add geographical information (loc_x and loc_y) for each death event. Through this process, we created a unified data frame for further analysis and visualization.
+# Following this, we used the death normalized_location to join the got_region_location table, giving us the normalized_region for each death. Finally, we joined the map coordinates (got_locations) based on the region, which allowed us to add geographical information (loc_x and loc_y) for each death event. Through this process, we created a unified data frame for further analysis and visualization.
 
 CREATE OR REPLACE TEMP TABLE deaths_detail_info AS
 SELECT 
