@@ -1,1 +1,53 @@
+# We addressed the issue of the many-to-many relationship between the character and death data sets. Some characters were listed using general terms, such as “Wildling” or “Stark Soldier”, and we didn’t have enough information to match them accurately. To handle this, we decided to remove these general terms. Since they could appear multiple times in the data sets, we removed the duplicate entries from both the character and death data sets.
 
+# Exclude rows with repeated character names
+got_characters = got_characters.drop_duplicates(subset = 'character', keep = 'first')
+
+# Exclude rows with repeated names
+got_deaths = got_deaths.drop_duplicates(subset = 'name', keep = 'first')
+
+# We moved on to the main process of data combination.
+
+# First, we joined the death data with the episode data based on the season and episode. Next, we used the victim’s name to join the character data, which provided the number of episodes each victim appeared in. We then dropped the irrelevant columns to ensure the data was focused on our goals. During this stage, we discovered that some victims were missing episode appearance data. Assuming each character appeared at least once, we filled in the missing values with 1. Finally, we used the look-up table to join the death location with the corresponding map region. Through this process, we created a unified data frame for further analysis and visualization.
+
+deaths_detail_info = (got_deaths  
+     # Create an identifier `season_episode` for merging with the episode rating data
+     .assign( identifier = lambda df:
+                 df.apply(lambda row:
+                         f"{row['season']}_{row['episode']}",
+                         axis = 1)
+            )
+     # Merge episode rating data using the common identifier (season_episode)
+     .merge(got_episodes,
+            on = ['season', 'episode'],
+            how='left')
+                      
+     # Merge character data based on the character name
+     .merge(got_characters,
+            left_on = 'name',
+            right_on = 'character',
+            how='left')
+    
+     # Remain only the relevant columns
+     .filter(items = ['season', 'episode', 'title', 'rating', 'name', 'killer', 'location', 'episodes_appeared'])
+                      
+     # Fill missing episode appearance values with 1 (due to each character appeared at least once)
+     .assign(episodes_appeared = lambda df: df['episodes_appeared'].fillna(1) )
+                      
+     # Merge location-region look-up table                 
+     .merge(got_location_region,
+            on = 'location',
+            how='left')
+                      
+     # Merge map location data based on region                 
+     .merge(got_locations,
+            left_on = 'region',
+            right_on = 'name',
+            how='left')
+     .rename(columns = {
+         'name_x': 'name'
+     })
+    .drop(columns = ['name_y'])
+)
+
+deaths_detail_info
