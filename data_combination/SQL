@@ -1,1 +1,67 @@
+# We addressed the issue of the many-to-many relationship between the character and death data sets. Some characters were listed using general terms, such as “Wildling” or “Stark Soldier”, and we didn’t have enough information to match them accurately. To handle this, we decided to remove these general terms. Since they could appear multiple times in the data sets, we removed the duplicate entries from both the character and death data sets.
 
+# Remove duplicated character names
+
+--Exclude the characters having repeated names
+CREATE OR REPLACE TEMP TABLE got_characters AS
+SELECT DISTINCT ON (normalized_character) *
+FROM got_characters;
+
+SELECT *
+FROM got_characters;
+
+# Remove duplicated victim names
+
+--Exclude the deaths having repeated names
+CREATE OR REPLACE TEMP TABLE got_deaths AS
+SELECT DISTINCT ON (normalized_name) *
+FROM got_deaths;
+
+SELECT *
+FROM got_deaths;
+
+# Validation Queries
+# We ran another duplicate check on the got_deaths table to ensure there are no more duplicate values.
+
+-- Check for duplicates
+SELECT 
+COUNT(*) - COUNT(DISTINCT (normalized_name, normalized_allegiance, season, episode, normalized_location, killer, killers_house, method, death_no)) AS duplicate_count
+FROM got_deaths;
+
+--There are no more duplicates after general characters are removed from the dataset
+
+# We moved on to the main process of data combination.
+
+# Instead of creating a new identifier, we joined the datasets based directly on the season and episode fields from the death and episode data. We then used these fields to join the episode data (got_episodes).
+
+Next, we joined the character data (got_characters) using the normalized_name of each victim, which provided the number of episodes each victim appeared in (episodes_appeared). We then dropped the irrelevant columns to ensure the data was focused on our goals. During this stage, we discovered that some victims were missing episode appearance data. Assuming each character appeared at least once, we filled in the missing values with 1 using COALESCE.
+
+Following this, we used the death normalized_location to join the got_region_location table, giving us the normalized_region for each death. Finally, we joined the map coordinates (got_locations) based on the region, which allowed us to add geographical information (loc_x and loc_y) for each death event. Through this process, we created a unified data frame for further analysis and visualization.
+
+CREATE OR REPLACE TEMP TABLE deaths_detail_info AS
+SELECT 
+    d.season,
+    d.episode,
+    r.title,
+    r.rating,
+    d.normalized_name,
+    d.killer,
+    d.normalized_location,
+    COALESCE(c.episodes_appeared, 1) AS episodes_appeared,
+    reg.normalized_region,
+    loc.loc_x,
+    loc.loc_y
+FROM got_deaths d
+LEFT JOIN got_episodes r ON d.season = r.season AND d.episode = r.episode
+LEFT JOIN got_characters c ON d.normalized_name = c.normalized_character
+LEFT JOIN got_region_location reg ON d.normalized_location = reg.normalized_location
+LEFT JOIN got_locations loc ON reg.normalized_region = loc.normalized_name
+ORDER BY 
+    d.season,
+    d.episode,
+    episodes_appeared DESC;
+
+# Once the table was created, we tested it to ensure it was functioning as expected.
+
+SELECT *
+FROM deaths_detail_info;
