@@ -1,1 +1,26 @@
+# Task 1: How do the death of prominent characters influence the ratings?
 
+# To analyze the data, we first organized it by season and episode. Next, we then grouped the data by season and episode to calculate the total number of deaths in each episode, while also identifying the most prominent characters based on their number of episodes appeared before their death. This allows us to calculate the death count for each episode and determine the prominence of deaths using the maximum episodes_appeared value. Upon examining the aggregation results, we observed that not every episode has character deaths. To address this, we joined the aggregated data with the original episode data to include ratings for all episodes and filled the death count with zeros for episodes without any deaths.
+
+WITH
+  death_count AS (
+    SELECT
+        season,
+        episode,
+        COUNT(*) AS num_deaths, 
+        MAX(rating) AS ep_rating, 
+        MAX(episodes_appeared) AS prominent_death_episodes_appeared 
+    FROM deaths_detail_info
+    GROUP BY season, episode
+  )
+SELECT
+  got_episodes.season,
+  got_episodes.episode,
+  got_episodes.rating,
+  COALESCE(death_count.num_deaths, 0) AS num_deaths,
+  COALESCE(death_count.prominent_death_episodes_appeared, 0) AS prominent_death_episodes_appeared
+FROM got_episodes
+LEFT JOIN death_count 
+    ON got_episodes.season = death_count.season 
+    AND got_episodes.episode = death_count.episode
+ORDER BY got_episodes.season, got_episodes.episode;
