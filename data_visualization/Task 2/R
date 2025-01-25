@@ -1,1 +1,45 @@
+# Task 2: Which regions are targeted most often?
 
+# To identify the most frequently targeted regions, we first grouped the death data by region and then summarized it by counting the number of deaths in each region. We also kept the location coordinates for each region for further visualization. To ensure the data set was complete, we removed any rows where the coordinate value was missing. The missing data were likely due to the AI-generated look-up table, which may have produced regions outside the provided list, possibly offering a more accurate result based on its knowledge. We dropped these rows since they could not be visualized on the map.
+
+death_location <- deaths_detail_info |>
+  group_by( region ) |>
+  summarize( death_count = n(),
+             fx = first(fx),
+             fy = first(fy)) |>
+  drop_na(fx, fy)
+
+death_location
+
+# To better understand the results, we visualized the data points on the map using a scatterplot. The map serves as the background, with each point representing a victim’s location. The size of the dots allows viewers to easily identify patterns in victim numbers across different regions.
+
+# Read map image
+map_raw_img <- image_read( got_map_url ) |>
+  image_convert( format = "png" )
+
+# Create a raster map with brightness adjustment
+raster_map_img <- map_raw_img |>
+  image_modulate( brightness = 120) |>
+  as.raster()
+
+# Calculate the image dimension
+info <- image_info(map_raw_img)
+IMAGE_DPI <- 96 # 96 dpi
+width_in = info$width / IMAGE_DPI
+height_in = info$height / IMAGE_DPI
+
+# Plot the death count at their locations on the map
+ggplot( death_location, aes( x = fx, y = height_in - fy ) ) +
+  annotation_raster(raster_map_img, xmin = 0, xmax = width_in, ymin = 0, ymax = height_in) +
+  geom_point( aes( size = death_count, color = death_count )) +
+  scale_color_gradient(low = "#FFB7B2",
+                       high = "#8A3A33") +
+  scale_x_continuous(limits = c(0, width_in )) +
+  scale_y_continuous(limits = c( 0, height_in)) +
+  scale_size(range = c(2, 10)) +
+  labs(title = "Targeted Region Across Ice and Fire World", x = "", y = "") +
+  theme(legend.position = "none") +
+  coord_fixed(ratio = 1)
+
+
+# Analysis: This map highlights regions with the highest death counts across the Game of Thrones world, with the largest concentration of deaths occurring in the central area of Westeros, specifically around King’s Landing. This distribution suggests that major conflicts and battles are concentrated in and around key political centers.
