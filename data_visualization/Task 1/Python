@@ -1,1 +1,71 @@
+# Task 1: How do the death of prominent characters influence the ratings?
 
+# To analyze the data, we organized it by season, episode, and the number of episodes to identify the prominent characters within each episode. We then grouped the data by season and episode for aggregation. This allows us to calculate the death count for each episode while retaining the episode ratings for further analysis. Finally, we created a scatter plot to visualize the relationship between episode ratings, death counts, and the deaths of prominent characters.
+
+episode_summary = ( deaths_detail_info
+     .sort_values(by = ['season', 'episode', 'episodes_appeared'], 
+                  ascending=[True, True, False])
+     .groupby(['season', 'episode'])
+     .agg(
+        num_deaths = ('name', 'count'),
+        rating = ('rating', 'first' ),
+        episodes_appeared = ( 'episodes_appeared', 'first' )
+      )
+      .rename(columns = {'rating': 'ep_rating'})
+      .merge(
+        got_episodes[['season', 'episode', 'rating']],
+        on=['season', 'episode'],
+        how='right'
+      )
+      .fillna({
+        'num_deaths': 0, 
+        'episodes_appeared': 0
+      })
+      .filter(items = ['season', 'episode', 'num_deaths', 'episodes_appeared', 'rating'])
+)
+
+episode_summary
+
+# Create figure
+plt.figure(figsize=(12, 8))
+
+# Scaling factor for point size
+SIZE_SCALE = 10
+
+# Create scatterplot with varying sizes
+scatter = plt.scatter( x = episode_summary['rating'], 
+                       y = np.log(episode_summary['num_deaths']),
+                       s = episode_summary['episodes_appeared'] * SIZE_SCALE,
+                       alpha = 0.8,
+                       color = 'blue')
+
+# Calculate the regression line
+z = np.polyfit(episode_summary['rating'], np.log1p(episode_summary['num_deaths']), 1)
+p = np.poly1d(z)
+
+
+# Add regression line
+plt.plot(episode_summary['rating'], 
+         p(episode_summary['rating']), 
+         color = 'blue', 
+         linestyle = '-')
+
+
+plt.title('Relationship Between Episode Ratings, Death Count, and Prominent Character Deaths')
+plt.xlabel('Episode Rating', fontsize = 12)
+plt.ylabel('log(Death Count)', fontsize = 12)
+
+# Add legends
+handles, labels = scatter.legend_elements(prop = "sizes", 
+                                          alpha = 0.6,
+                                          num = 5,
+                                          func = lambda x: x/SIZE_SCALE)  # reverse the size scaling
+plt.legend( handles, 
+            labels,
+            title = "Appeared Episodes of\nProminent Characters")
+
+# Show the plot
+plt.show()
+
+
+# Analysis: This scatterplot shows a positive correlation between episode ratings and the number of deaths in the show. Episodes with higher ratings tend to have more deaths, especially as ratings approach 10. The regression line has a slight upward slope, suggesting a mild positive correlation between the two variables. Although the trend is positive, the correlation appears to be weak, as the data points are widely scattered around the line. There are several episodes with both high and low death counts across varying ratings, indicating that while episodes with higher ratings may have slightly more deaths, it is not a strong or consistent pattern. Additionally, the deaths of prominent characters appear to be randomly distributed, making it difficult to identify any clear relationship between these deaths and episode ratings.
