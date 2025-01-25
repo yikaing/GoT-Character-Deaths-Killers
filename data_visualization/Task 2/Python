@@ -1,1 +1,48 @@
+# Task 2: Which regions are targeted most often?
 
+# To identify the most frequently targeted regions, we first grouped the death data by region and then aggregated it by counting the number of deaths in each region. We also kept the location coordinates for each region for further visualization. To ensure the data set was complete, we removed any rows where the coordinate value was missing. The missing data were likely due to the AI-generated look-up table, which may have produced regions outside the provided list, possibly offering a more accurate result based on its knowledge. We dropped these rows since they could not be visualized on the map.
+
+death_location = ( deaths_detail_info
+     .groupby('region')
+     .agg(
+        death_count=('region', 'count'),
+        loc_x=('fx', 'first'),
+        loc_y=('fy', 'first') )
+     .dropna(subset=['loc_x', 'loc_y'])
+)
+
+death_location
+
+# To better understand the results, we visualized the data points on the map using a scatterplot. The map serves as the background, with each point representing a victim’s location. The size of the dots allows viewers to easily identify patterns in victim numbers across different regions.
+
+# Read map image
+response = requests.get(got_map_url[0])
+map_raw_img = Image.open(BytesIO(response.content))
+map_raw_img
+
+# Create a raster map with brightness adjustment
+enhancer = ImageEnhance.Brightness(map_raw_img)
+raster_map_img = enhancer.enhance(1.2)
+
+# Calculate image dimensions
+IMAGE_DPI = 96
+width_in = map_raw_img.size[0] / IMAGE_DPI
+height_in = map_raw_img.size[1] / IMAGE_DPI
+
+# Create the plot
+plt.figure(figsize=(width_in, height_in), dpi=IMAGE_DPI)
+
+# Add the map as background
+plt.imshow(raster_map_img, extent=[0, width_in, 0, height_in])
+
+# Plot the points
+scatter = plt.scatter(
+    death_location['loc_x'], 
+    height_in - death_location['loc_y'], # flip Y axis to align coordinate
+    s = death_location['death_count'] * 100,  # adjust point size
+    c = death_location['death_count'],
+    alpha = 0.9
+)
+
+
+# Analysis: This map highlights regions with the highest death counts across the Game of Thrones world, with the largest concentration of deaths occurring in the central area of Westeros, specifically around King’s Landing. This distribution suggests that major conflicts and battles are concentrated in and around key political centers.
