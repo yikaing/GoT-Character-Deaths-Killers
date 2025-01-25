@@ -1,1 +1,12 @@
+# Task 2: Which regions are targeted most often?
 
+# To identify the most frequently targeted regions, we first grouped the death data by region and then summarized it by counting the number of deaths in each region. We also kept the location coordinates for each region for further analysis. To ensure the data set was complete, we removed any rows where the coordinate value was missing. The missing data were likely due to the AI-generated look-up table, which may have produced regions outside the provided list, possibly offering a more accurate result based on its knowledge. We dropped these rows since they could not be visualized on the map.
+
+SELECT
+    normalized_region AS region,
+    COUNT(*) AS death_count,       
+    MAX(loc_x) AS fx,             
+    MAX(loc_y) AS fy             
+FROM deaths_detail_info
+WHERE loc_x IS NOT NULL AND loc_y IS NOT NULL  
+GROUP BY region;
